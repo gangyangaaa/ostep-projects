@@ -1,1 +1,1 @@
-./reverse < tests/7.in
+./reverse tests/7.in
