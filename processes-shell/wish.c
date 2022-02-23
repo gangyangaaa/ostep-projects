@@ -7,6 +7,10 @@
 
 #define TOK_BUFSIZE 200
 #define DELIM " \t"
+#define PATH_SIZE 200
+#define PATH_NUM 20
+
+char *path[PATH_NUM];
 
 char *read_line(FILE *fin) {
     char *line_buf = NULL;
@@ -27,7 +31,7 @@ char **parse_line(char *line) {
     if (!tokens) {
         exit(0); // malloc failure
     }
-    strtok(line, "\n");
+    strtok(line, "\n"); //strip off trailing "\n"
     token = strsep(&line, DELIM);
     while (token != NULL) {
         tokens[position] = token;
@@ -46,16 +50,40 @@ char **parse_line(char *line) {
     tokens[position] = NULL;
     return tokens;
 }
+
+int cat_path(char** args) {
+    char temp_path[PATH_SIZE];
+
+    int i = 0;
+    while(path[i] != NULL) {
+        strcpy(temp_path, path[i]);
+        strcat(temp_path, "/");
+        strcat(temp_path, args[0]);
+        int ret = access(temp_path, X_OK);
+        if (ret == 0) {
+            args[0] = malloc((strlen(temp_path) + 1) * sizeof(char));
+            strcpy(args[0], temp_path);
+            return 0;
+        }
+        i++;
+    } 
+    return -1;
+}
+
 //////// need implement
 int exec_args(char **args) {
     pid_t pid;
+    int ret = cat_path(args);
+    if (ret == -1) {
+        exit(1);
+    }
     pid = fork();
     int status;
     if (pid < 0) {
         perror("fork");
     }
     else if (pid == 0) {
-        if (execvp(args[0], args) == -1) {
+        if (execv(args[0], args) == -1) {
             perror("exec");
         }
         exit(0);
@@ -85,6 +113,7 @@ void wish_loop() {
 
 
 int main(int argc, char *argv[]) {
+    path[0] = "/bin";
     wish_loop();
     return 0;
 }
