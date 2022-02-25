@@ -12,6 +12,15 @@
 
 char *path[PATH_NUM];
 
+int args_num(char** args) {
+    int i = 0;
+    while (args[i] != NULL) {
+        i++;
+    }
+    return i;
+}
+
+
 char *read_line(FILE *fin) {
     char *line_buf = NULL;
     size_t line_buf_size = 0;
@@ -51,6 +60,17 @@ char **parse_line(char *line) {
     return tokens;
 }
 
+void update_path(char** args) {
+    int i = 0;
+    while(args[i + 1] != NULL) {
+        path[i] = args[i + 1];
+        i++;
+    }
+    if (i == 0) {
+        path[0] = NULL;
+    }
+}
+
 int cat_path(char** args) {
     char temp_path[PATH_SIZE];
 
@@ -70,9 +90,30 @@ int cat_path(char** args) {
     return -1;
 }
 
-//////// need implement
 int exec_args(char **args) {
     pid_t pid;
+    /* add built-in */
+    if (strcmp(args[0], "exit") == 0) {
+        exit(0);
+    }
+    else if (strcmp(args[0], "cd") == 0) {
+        int num = args_num(args);
+        if (num != 2) {
+            exit(1);
+        }
+        else {
+            int err = chdir(args[1]);
+            if (err == -1) {
+                exit(1);
+            }
+            return 1;
+        }
+    }
+    else if (strcmp(args[0], "path") == 0) {
+        update_path(args);
+        return 1;
+    }
+    /* fork and exec */
     int ret = cat_path(args);
     if (ret == -1) {
         exit(1);
