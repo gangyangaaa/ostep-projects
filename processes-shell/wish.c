@@ -90,14 +90,32 @@ int cat_path(char** args) {
     return -1;
 }
 
+int check_redirection(char** args) {
+    int index = 0;
+    while (args[index + 1] != NULL) {
+        if (strcmp(args[index], ">") == 0) {
+            if (strcmp(args[index + 1], ">") != 0 && args[index + 2] == NULL) {
+                return 0;
+            }
+            else {
+                return 1;
+            }
+        }
+        index++;
+    }
+    return -1;
+}
+
 int exec_args(char **args) {
     pid_t pid;
+    int num = args_num(args);
+    char* redirect_file;
+
     /* add built-in */
     if (strcmp(args[0], "exit") == 0) {
         exit(0);
     }
     else if (strcmp(args[0], "cd") == 0) {
-        int num = args_num(args);
         if (num != 2) {
             exit(1);
         }
@@ -113,7 +131,18 @@ int exec_args(char **args) {
         update_path(args);
         return 1;
     }
-    /* fork and exec */
+
+    /* check redirection */
+    int redirect = check_redirection(args);
+    if (redirect == 0) {
+        redirect_file = args[num - 1];
+        args[num - 2] = NULL;   // super important from receiving no file directory error
+    }
+    else if (redirect == 1) {
+        exit(1);
+    }
+
+    /* fork, redirection, and exec */
     int ret = cat_path(args);
     if (ret == -1) {
         exit(1);
@@ -124,10 +153,16 @@ int exec_args(char **args) {
         perror("fork");
     }
     else if (pid == 0) {
+        if (!redirect) {
+            FILE* file = fopen(redirect_file, "w");
+            dup2(fileno(file), STDOUT_FILENO);
+            fclose(file);
+            dup2(fileno(file), STDERR_FILENO);
+            
+        }
         if (execv(args[0], args) == -1) {
             perror("exec");
         }
-        exit(0);
     }
     else {
         wait(NULL);
