@@ -11,6 +11,7 @@
 #define PATH_NUM 20
 
 char *path[PATH_NUM];
+char error_message[30] = "An error has occurred\n";
 
 int args_num(char** args) {
     int i = 0;
@@ -117,11 +118,13 @@ int exec_args(char **args) {
     }
     else if (strcmp(args[0], "cd") == 0) {
         if (num != 2) {
+            write(STDERR_FILENO, error_message, strlen(error_message));
             exit(1);
         }
         else {
             int err = chdir(args[1]);
             if (err == -1) {
+                write(STDERR_FILENO, error_message, strlen(error_message));
                 exit(1);
             }
             return 1;
@@ -139,18 +142,21 @@ int exec_args(char **args) {
         args[num - 2] = NULL;   // super important from receiving no file directory error
     }
     else if (redirect == 1) {
+        write(STDERR_FILENO, error_message, strlen(error_message));
         exit(1);
     }
 
     /* fork, redirection, and exec */
     int ret = cat_path(args);
     if (ret == -1) {
+        write(STDERR_FILENO, error_message, strlen(error_message));
         exit(1);
     }
     pid = fork();
     int status;
     if (pid < 0) {
-        perror("fork");
+        write(STDERR_FILENO, error_message, strlen(error_message));
+        exit(1);
     }
     else if (pid == 0) {
         if (!redirect) {
@@ -161,7 +167,8 @@ int exec_args(char **args) {
             
         }
         if (execv(args[0], args) == -1) {
-            perror("exec");
+            write(STDERR_FILENO, error_message, strlen(error_message));
+            exit(1);
         }
     }
     else {
