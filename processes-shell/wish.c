@@ -13,6 +13,7 @@
 
 char *path[PATH_NUM];
 char error_message[30] = "An error has occurred\n";
+int multi_args = 0;
 
 void print_error() {
     write(STDERR_FILENO, error_message, strlen(error_message));
@@ -44,6 +45,9 @@ char **parse_line(char *line) {
     int position = 0;
     char *token;
     char **tokens = malloc(bufsize * sizeof(char*));
+    if (strstr(line, "&") != NULL) {
+        multi_args = 1;
+    }
     if (!tokens) {
         exit(0); // malloc failure
     }
@@ -176,7 +180,6 @@ int exec_args(char **args) {
             fclose(file);
             
         }
-        ////////////// need to debug
         int exec_err = execv(args[0], args);
         if (exec_err == -1) {
             write(STDERR_FILENO, error_message, strlen(error_message));
@@ -198,7 +201,37 @@ void wish_loop(FILE* file) {
     while (1) {
         line = read_line(file);
         args = parse_line(line);
-        status = exec_args(args);
+        int num = args_num(args);
+        char* new_args[num];
+        if (multi_args == 0) {
+            status = exec_args(args);
+        }
+        else {
+            if (strcmp(args[0], "&") == 0) {
+                print_error();
+            }
+            int i = 0;
+            int j;
+            while (args[i] != NULL) {
+                
+                j = 0;
+                while (strcmp(args[i], "&") != 0) {
+                    new_args[j] = args[i];
+                    j++;
+                    i++;
+                    if (i == num) {
+                        break;
+                    }
+                }
+                new_args[j] = NULL;
+                status = exec_args(new_args);
+                if (i == num) {
+                        break;
+                    }
+                i++;
+            }
+        }
+        
         free(line);
         free(args);
         if (status == 0) {
