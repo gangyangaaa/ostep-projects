@@ -9,9 +9,15 @@
 #define DELIM " \t"
 #define PATH_SIZE 200
 #define PATH_NUM 20
+#define BATCH_SIZE 500
 
 char *path[PATH_NUM];
 char error_message[30] = "An error has occurred\n";
+
+void print_error() {
+    write(STDERR_FILENO, error_message, strlen(error_message));
+    exit(0);
+}
 
 int args_num(char** args) {
     int i = 0;
@@ -118,14 +124,12 @@ int exec_args(char **args) {
     }
     else if (strcmp(args[0], "cd") == 0) {
         if (num != 2) {
-            write(STDERR_FILENO, error_message, strlen(error_message));
-            exit(1);
+            print_error();
         }
         else {
             int err = chdir(args[1]);
             if (err == -1) {
-                write(STDERR_FILENO, error_message, strlen(error_message));
-                exit(1);
+                print_error();
             }
             return 1;
         }
@@ -142,15 +146,13 @@ int exec_args(char **args) {
         args[num - 2] = NULL;   // super important from receiving no file directory error
     }
     else if (redirect == 1) {
-        write(STDERR_FILENO, error_message, strlen(error_message));
-        exit(1);
+        print_error();
     }
 
     /* fork, redirection, and exec */
     int ret = cat_path(args);
     if (ret == -1) {
-        write(STDERR_FILENO, error_message, strlen(error_message));
-        exit(1);
+        print_error();
     }
     pid = fork();
     int status;
@@ -162,13 +164,12 @@ int exec_args(char **args) {
         if (!redirect) {
             FILE* file = fopen(redirect_file, "w");
             dup2(fileno(file), STDOUT_FILENO);
-            fclose(file);
             dup2(fileno(file), STDERR_FILENO);
+            fclose(file);
             
         }
         if (execv(args[0], args) == -1) {
-            write(STDERR_FILENO, error_message, strlen(error_message));
-            exit(1);
+            print_error();
         }
     }
     else {
@@ -178,25 +179,50 @@ int exec_args(char **args) {
 }
 
 
-void wish_loop() {
+void wish_loop(FILE* file) {
     int status;
     char *line;
     char **args;
 
     do {
-        printf("wish> ");
-        line = read_line(stdin);
+        line = read_line(file);
         args = parse_line(line);
         status = exec_args(args);
         free(line);
         free(args);
+        write(STDOUT_FILENO, "wish> ", strlen("wish> "));
     } while (status);
 }
 
 
 
 int main(int argc, char *argv[]) {
+    char* batch_file;
+    FILE* file;
+    int batch = 0;
+    if (argc == 1) {
+        write(STDOUT_FILENO, "wish> ", strlen("wish> "));
+    }
+    else if (argc == 2) {
+        batch_file = strdup(argv[1]);
+        file = fopen(batch_file, "r");
+        if (file == NULL) {
+            write(STDERR_FILENO, error_message, strlen(error_message));
+            exit(1);
+        }
+        batch = 1;
+    }
+    else {
+        write(STDERR_FILENO, error_message, strlen(error_message));
+        exit(1);
+    }
     path[0] = "/bin";
-    wish_loop();
+    if (batch) {
+        wish_loop(file);
+        fclose(file);
+    }
+    else {
+        wish_loop(stdin);
+    }
     return 0;
 }
