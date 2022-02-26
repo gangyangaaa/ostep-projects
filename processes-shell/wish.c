@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #define TOK_BUFSIZE 200
-#define DELIM " \t"
+#define DELIM " \t\n\r"
 #define PATH_SIZE 200
 #define PATH_NUM 20
 #define BATCH_SIZE 500
@@ -47,8 +47,7 @@ char **parse_line(char *line) {
     if (!tokens) {
         exit(0); // malloc failure
     }
-    strtok(line, "\n"); //strip off trailing "\n"
-    token = strsep(&line, DELIM);
+    token = strtok(line, DELIM);
     while (token != NULL) {
         tokens[position] = token;
         position++;
@@ -61,7 +60,7 @@ char **parse_line(char *line) {
             }
         }
 
-        token = strsep(&line, DELIM);
+        token = strtok(NULL, DELIM);
     }
     tokens[position] = NULL;
     return tokens;
@@ -101,26 +100,36 @@ int check_redirection(char** args) {
     int index = 0;
     while (args[index + 1] != NULL) {
         if (strcmp(args[index], ">") == 0) {
-            if (strcmp(args[index + 1], ">") != 0 && args[index + 2] == NULL) {
+            if (index == 0) {
+                return -1;
+            }
+            else if (strcmp(args[index + 1], ">") != 0 && args[index + 2] == NULL) {
                 return 0;
             }
             else {
-                return 1;
+                return -1; // error
             }
         }
         index++;
     }
-    return -1;
+    return 1; // no redirection
 }
 
 int exec_args(char **args) {
     pid_t pid;
     int num = args_num(args);
     char* redirect_file;
+    int command_error = 0;
 
     /* add built-in */
     if (strcmp(args[0], "exit") == 0) {
-        exit(0);
+        if (num == 1) {
+             exit(0);
+        }
+        else {
+            print_error();
+        }
+       
     }
     else if (strcmp(args[0], "cd") == 0) {
         if (num != 2) {
@@ -145,7 +154,7 @@ int exec_args(char **args) {
         redirect_file = args[num - 1];
         args[num - 2] = NULL;   // super important from receiving no file directory error
     }
-    else if (redirect == 1) {
+    else if (redirect == -1) {
         print_error();
     }
 
@@ -155,21 +164,23 @@ int exec_args(char **args) {
         print_error();
     }
     pid = fork();
-    int status;
     if (pid < 0) {
         write(STDERR_FILENO, error_message, strlen(error_message));
-        exit(1);
+        exit(0);
     }
     else if (pid == 0) {
-        if (!redirect) {
+        if (redirect == 0) {
             FILE* file = fopen(redirect_file, "w");
             dup2(fileno(file), STDOUT_FILENO);
             dup2(fileno(file), STDERR_FILENO);
             fclose(file);
             
         }
-        if (execv(args[0], args) == -1) {
-            print_error();
+        ////////////// need to debug
+        int exec_err = execv(args[0], args);
+        if (exec_err == -1) {
+            write(STDERR_FILENO, error_message, strlen(error_message));
+            exit(0);
         }
     }
     else {
@@ -184,14 +195,19 @@ void wish_loop(FILE* file) {
     char *line;
     char **args;
 
-    do {
+    while (1) {
         line = read_line(file);
         args = parse_line(line);
         status = exec_args(args);
         free(line);
         free(args);
-        write(STDOUT_FILENO, "wish> ", strlen("wish> "));
-    } while (status);
+        if (status == 0) {
+            break;
+        }
+        else {
+            write(STDOUT_FILENO, "wish> ", strlen("wish> "));
+        }
+    }
 }
 
 
@@ -200,6 +216,7 @@ int main(int argc, char *argv[]) {
     char* batch_file;
     FILE* file;
     int batch = 0;
+    // select batch mode or normal mode
     if (argc == 1) {
         write(STDOUT_FILENO, "wish> ", strlen("wish> "));
     }
